@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "apimServiceName": {
+      "value": "apim-learning-demo"
+    },
+    "location": {
+      "value": "eastus"
+    },
+    "sku": {
+      "value": "Developer"
+    },
+    "skuCount": {
+      "value": 1
+    },
+    "publisherEmail": {
+      "value": "your-email@example.com"
+    },
+    "publisherName": {
+      "value": "Your Organization Name"
+    },
+    "enableApplicationInsights": {
+      "value": true
+    }
+  }
+}

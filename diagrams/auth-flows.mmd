@@ -1,0 +1,46 @@
+graph TB
+    subgraph "1. Subscription Key Authentication"
+        Client1[Client] -->|Request + Subscription Key| APIM1[APIM Gateway]
+        APIM1 -->|Validate Key| Sub1{Key Valid?}
+        Sub1 -->|Yes| Backend1[Backend API]
+        Sub1 -->|No| Reject1[401 Unauthorized]
+    end
+
+    subgraph "2. OAuth 2.0 / JWT Authentication"
+        Client2[Client] -->|1. Request Token| AAD[Azure AD / OAuth Provider]
+        AAD -->|2. Return JWT Token| Client2
+        Client2 -->|3. Request + Bearer Token| APIM2[APIM Gateway]
+        APIM2 -->|4. Validate JWT| JWT{Token Valid?}
+        JWT -->|Yes| Backend2[Backend API]
+        JWT -->|No| Reject2[401 Unauthorized]
+    end
+
+    subgraph "3. Client Certificate Authentication"
+        Client3[Client] -->|Request + Client Cert| APIM3[APIM Gateway]
+        APIM3 -->|Validate Certificate| Cert{Cert Valid?}
+        Cert -->|Yes| Backend3[Backend API]
+        Cert -->|No| Reject3[401 Unauthorized]
+    end
+
+    subgraph "4. Managed Identity to Backend"
+        Client4[Client] -->|Request + Subscription Key| APIM4[APIM Gateway]
+        APIM4 -->|Use Managed Identity| MI[Managed Identity]
+        MI -->|Get Token| AAD2[Azure AD]
+        AAD2 -->|Return Token| MI
+        APIM4 -->|Request + Token| Backend4[Backend API]
+    end
+
+    subgraph "5. API Key Header/Query Parameter"
+        Client5[Client] -->|Request + API Key| APIM5[APIM Gateway]
+        APIM5 -->|Check Named Value| Key{Key Valid?}
+        Key -->|Yes| Backend5[Backend API]
+        Key -->|No| Reject5[401 Unauthorized]
+    end
+
+    style APIM1 fill:#0078d4,stroke:#005a9e,color:#fff
+    style APIM2 fill:#0078d4,stroke:#005a9e,color:#fff
+    style APIM3 fill:#0078d4,stroke:#005a9e,color:#fff
+    style APIM4 fill:#0078d4,stroke:#005a9e,color:#fff
+    style APIM5 fill:#0078d4,stroke:#005a9e,color:#fff
+    style AAD fill:#00bcf2,color:#000
+    style AAD2 fill:#00bcf2,color:#000

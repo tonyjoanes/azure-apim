@@ -1,0 +1,229 @@
+### APIM Sample API Tests
+### Configure these variables before testing
+
+### Variables
+@apimGateway = your-apim-name.azure-api.net
+@subscriptionKey = your-subscription-key-here
+@baseUrl = https://{{apimGateway}}
+
+###############################################################################
+### Health Check
+###############################################################################
+
+### Health Check - No auth required
+GET {{baseUrl}}/health
+
+###############################################################################
+### Products API
+###############################################################################
+
+### Get All Products
+GET {{baseUrl}}/api/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+Accept: application/json
+
+### Get Products with Filters
+GET {{baseUrl}}/api/products?category=Electronics&minPrice=50&maxPrice=500
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+Accept: application/json
+
+### Get Product by ID
+GET {{baseUrl}}/api/products/1
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+Accept: application/json
+
+### Get Product by ID - Not Found
+GET {{baseUrl}}/api/products/99999
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+Accept: application/json
+
+### Create New Product
+POST {{baseUrl}}/api/products
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "name": "Wireless Earbuds",
+  "description": "Premium wireless earbuds with noise cancellation",
+  "price": 149.99,
+  "category": "Electronics",
+  "stock": 50
+}
+
+### Update Product
+PUT {{baseUrl}}/api/products/1
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "name": "Updated Laptop",
+  "description": "High-performance laptop - Updated",
+  "price": 1199.99,
+  "category": "Electronics",
+  "stock": 45,
+  "isAvailable": true
+}
+
+### Delete Product
+DELETE {{baseUrl}}/api/products/1
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+###############################################################################
+### Users API
+###############################################################################
+
+### Get All Users
+GET {{baseUrl}}/api/users
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+Accept: application/json
+
+### Get User by ID
+GET {{baseUrl}}/api/users/1
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+Accept: application/json
+
+### Get User by ID - Not Found
+GET {{baseUrl}}/api/users/99999
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+Accept: application/json
+
+### Create New User
+POST {{baseUrl}}/api/users
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "email": "newuser@example.com",
+  "firstName": "Alice",
+  "lastName": "Johnson"
+}
+
+### Create User - Duplicate Email
+POST {{baseUrl}}/api/users
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "email": "john.doe@example.com",
+  "firstName": "Duplicate",
+  "lastName": "User"
+}
+
+### Delete User
+DELETE {{baseUrl}}/api/users/1
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+###############################################################################
+### Authentication Tests
+###############################################################################
+
+### Missing Subscription Key - Should return 401
+GET {{baseUrl}}/api/products
+Accept: application/json
+
+### Invalid Subscription Key - Should return 401
+GET {{baseUrl}}/api/products
+Ocp-Apim-Subscription-Key: invalid-key-12345
+Accept: application/json
+
+### Subscription Key in Query Parameter (if enabled)
+GET {{baseUrl}}/api/products?subscription-key={{subscriptionKey}}
+Accept: application/json
+
+###############################################################################
+### Custom Headers
+###############################################################################
+
+### Request with Custom Headers
+GET {{baseUrl}}/api/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+X-Request-Id: test-request-123
+X-Correlation-Id: correlation-456
+Accept: application/json
+User-Agent: RestClient/1.0
+
+###############################################################################
+### Tracing (if enabled in APIM)
+###############################################################################
+
+### Request with Tracing
+GET {{baseUrl}}/api/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+Ocp-Apim-Trace: true
+Accept: application/json
+
+###############################################################################
+### Edge Cases
+###############################################################################
+
+### Create Product - Missing Required Fields
+POST {{baseUrl}}/api/products
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "description": "Missing name field",
+  "price": 99.99
+}
+
+### Create Product - Invalid Data Types
+POST {{baseUrl}}/api/products
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "name": "Test Product",
+  "price": "not-a-number",
+  "stock": "invalid"
+}
+
+###############################################################################
+### Performance Testing
+###############################################################################
+
+### Multiple Rapid Requests (for rate limit testing)
+### Execute these in sequence to test rate limiting
+
+### Request 1
+GET {{baseUrl}}/api/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Request 2
+GET {{baseUrl}}/api/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Request 3
+GET {{baseUrl}}/api/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Request 4
+GET {{baseUrl}}/api/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Request 5
+GET {{baseUrl}}/api/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Request 6
+GET {{baseUrl}}/api/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Request 7
+GET {{baseUrl}}/api/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Request 8
+GET {{baseUrl}}/api/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Request 9
+GET {{baseUrl}}/api/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Request 10
+GET {{baseUrl}}/api/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Request 11 - Should trigger rate limit if set to 10 req/min
+GET {{baseUrl}}/api/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}

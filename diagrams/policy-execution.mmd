@@ -1,0 +1,41 @@
+graph TD
+    Start([Request Received]) --> GlobalInbound[Global Policy - Inbound]
+    GlobalInbound --> ProductInbound[Product Policy - Inbound]
+    ProductInbound --> APIInbound[API Policy - Inbound]
+    APIInbound --> OperationInbound[Operation Policy - Inbound]
+
+    OperationInbound --> Backend{Backend<br/>Call}
+
+    Backend -->|Success| OperationOutbound[Operation Policy - Outbound]
+    Backend -->|Error| OperationError[Operation Policy - On-Error]
+
+    OperationOutbound --> APIOutbound[API Policy - Outbound]
+    APIOutbound --> ProductOutbound[Product Policy - Outbound]
+    ProductOutbound --> GlobalOutbound[Global Policy - Outbound]
+    GlobalOutbound --> Response([Return Response])
+
+    OperationError --> APIError[API Policy - On-Error]
+    APIError --> ProductError[Product Policy - On-Error]
+    ProductError --> GlobalError[Global Policy - On-Error]
+    GlobalError --> ErrorResponse([Return Error Response])
+
+    style GlobalInbound fill:#e3f2fd
+    style ProductInbound fill:#e3f2fd
+    style APIInbound fill:#e3f2fd
+    style OperationInbound fill:#e3f2fd
+
+    style GlobalOutbound fill:#e8f5e9
+    style ProductOutbound fill:#e8f5e9
+    style APIOutbound fill:#e8f5e9
+    style OperationOutbound fill:#e8f5e9
+
+    style GlobalError fill:#ffebee
+    style ProductError fill:#ffebee
+    style APIError fill:#ffebee
+    style OperationError fill:#ffebee
+
+    style Backend fill:#fff3e0
+
+    classDef inboundClass fill:#e3f2fd,stroke:#1976d2
+    classDef outboundClass fill:#e8f5e9,stroke:#388e3c
+    classDef errorClass fill:#ffebee,stroke:#d32f2f

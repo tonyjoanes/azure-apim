@@ -1,0 +1,53 @@
+graph TB
+    subgraph "Client Layer"
+        WebApp[Web Application]
+        MobileApp[Mobile App]
+        ThirdParty[Third Party Services]
+    end
+
+    subgraph "Azure API Management"
+        Gateway[API Gateway]
+        DevPortal[Developer Portal]
+        Management[Management Plane]
+
+        subgraph "Gateway Components"
+            Gateway --> Policies[Policies Engine]
+            Gateway --> Cache[Response Cache]
+            Gateway --> Analytics[Analytics]
+        end
+    end
+
+    subgraph "Backend Services"
+        API1[REST API]
+        API2[SOAP Service]
+        API3[Azure Functions]
+        API4[Logic Apps]
+        API5[Third Party APIs]
+    end
+
+    subgraph "Supporting Services"
+        KeyVault[Azure Key Vault]
+        AppInsights[Application Insights]
+        AAD[Azure Active Directory]
+    end
+
+    WebApp --> Gateway
+    MobileApp --> Gateway
+    ThirdParty --> Gateway
+
+    Gateway --> API1
+    Gateway --> API2
+    Gateway --> API3
+    Gateway --> API4
+    Gateway --> API5
+
+    Gateway -.-> KeyVault
+    Gateway -.-> AppInsights
+    Gateway -.-> AAD
+    Management -.-> KeyVault
+
+    DevPortal --> Management
+
+    style Gateway fill:#0078d4,stroke:#005a9e,color:#fff
+    style DevPortal fill:#0078d4,stroke:#005a9e,color:#fff
+    style Management fill:#0078d4,stroke:#005a9e,color:#fff

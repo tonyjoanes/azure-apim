@@ -1,0 +1,75 @@
+<policies>
+    <inbound>
+        <base />
+        <!-- CORS Policy -->
+        <cors allow-credentials="true">
+            <!-- Allowed origins -->
+            <allowed-origins>
+                <origin>https://www.example.com</origin>
+                <origin>https://app.example.com</origin>
+                <!-- Allow all origins (not recommended for production) -->
+                <!-- <origin>*</origin> -->
+            </allowed-origins>
+
+            <!-- Allowed methods -->
+            <allowed-methods>
+                <method>GET</method>
+                <method>POST</method>
+                <method>PUT</method>
+                <method>DELETE</method>
+                <method>PATCH</method>
+                <method>OPTIONS</method>
+            </allowed-methods>
+
+            <!-- Allowed headers -->
+            <allowed-headers>
+                <header>Content-Type</header>
+                <header>Authorization</header>
+                <header>X-Requested-With</header>
+                <header>Accept</header>
+                <header>*</header> <!-- Allow all headers -->
+            </allowed-headers>
+
+            <!-- Exposed headers (visible to the browser) -->
+            <expose-headers>
+                <header>X-RateLimit-Limit</header>
+                <header>X-RateLimit-Remaining</header>
+                <header>X-Request-Id</header>
+            </expose-headers>
+
+            <!-- Preflight request cache duration (in seconds) -->
+            <preflight-result-max-age>3600</preflight-result-max-age>
+        </cors>
+
+        <!-- Alternative: Dynamic CORS based on request origin -->
+        <!--
+        <cors allow-credentials="true">
+            <allowed-origins>
+                <origin>@{
+                    var origin = context.Request.Headers.GetValueOrDefault("Origin", "");
+                    var allowedOrigins = new[] {
+                        "https://www.example.com",
+                        "https://app.example.com"
+                    };
+                    return allowedOrigins.Contains(origin) ? origin : "";
+                }</origin>
+            </allowed-origins>
+            <allowed-methods preflight-result-max-age="3600">
+                <method>*</method>
+            </allowed-methods>
+            <allowed-headers>
+                <header>*</header>
+            </allowed-headers>
+        </cors>
+        -->
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

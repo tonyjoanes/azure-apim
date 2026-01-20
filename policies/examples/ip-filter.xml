@@ -1,0 +1,99 @@
+<policies>
+    <inbound>
+        <base />
+        <!-- IP Filter - Allow specific IP addresses or ranges -->
+        <ip-filter action="allow">
+            <!-- Single IP addresses -->
+            <address>13.66.201.169</address>
+            <address>13.66.140.128</address>
+
+            <!-- IP address range using CIDR notation -->
+            <address-range from="13.66.0.0" to="13.66.255.255" />
+
+            <!-- Another range -->
+            <address-range from="192.168.1.0" to="192.168.1.255" />
+        </ip-filter>
+
+        <!-- Alternative: Deny specific IPs (blacklist) -->
+        <!--
+        <ip-filter action="forbid">
+            <address>203.0.113.42</address>
+            <address-range from="198.51.100.0" to="198.51.100.255" />
+        </ip-filter>
+        -->
+
+        <!-- Alternative: Custom IP validation logic -->
+        <!--
+        <choose>
+            <when condition="@{
+                var clientIp = context.Request.IpAddress;
+                var allowedIps = new[] {
+                    "13.66.201.169",
+                    "13.66.140.128"
+                };
+                return !allowedIps.Contains(clientIp);
+            }">
+                <return-response>
+                    <set-status code="403" reason="Forbidden" />
+                    <set-body>@{
+                        return new JObject(
+                            new JProperty("error", "Forbidden"),
+                            new JProperty("message", "Access denied from IP: " + context.Request.IpAddress),
+                            new JProperty("timestamp", DateTime.UtcNow.ToString("o"))
+                        ).ToString();
+                    }</set-body>
+                </return-response>
+            </when>
+        </choose>
+        -->
+
+        <!-- Alternative: Check if IP is in named value (comma-separated list) -->
+        <!--
+        <choose>
+            <when condition="@{
+                var clientIp = context.Request.IpAddress;
+                var allowedIps = "{{allowed-ip-addresses}}".Split(',').Select(ip => ip.Trim());
+                return !allowedIps.Contains(clientIp);
+            }">
+                <return-response>
+                    <set-status code="403" reason="Forbidden" />
+                    <set-header name="X-Blocked-IP" exists-action="override">
+                        <value>@(context.Request.IpAddress)</value>
+                    </set-header>
+                    <set-body>{"error": "IP address not allowed"}</set-body>
+                </return-response>
+            </when>
+        </choose>
+        -->
+
+        <!-- Log allowed IP -->
+        <trace source="ip-filter" severity="information">
+            <message>@("Request allowed from IP: " + context.Request.IpAddress)</message>
+        </trace>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+        <!-- Custom error for IP filtering -->
+        <choose>
+            <when condition="@(context.LastError.Reason == "Forbidden")">
+                <return-response>
+                    <set-status code="403" reason="Forbidden" />
+                    <set-body>@{
+                        return new JObject(
+                            new JProperty("error", "Forbidden"),
+                            new JProperty("message", "Your IP address is not allowed to access this API"),
+                            new JProperty("ip", context.Request.IpAddress),
+                            new JProperty("timestamp", DateTime.UtcNow.ToString("o"))
+                        ).ToString();
+                    }</set-body>
+                </return-response>
+            </when>
+        </choose>
+    </on-error>
+</policies>

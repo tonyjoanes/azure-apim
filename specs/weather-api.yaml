@@ -1,0 +1,202 @@
+openapi: 3.0.0
+info:
+  title: Weather API
+  version: 1.0.0
+  description: A simple weather API for demonstrating APIM features
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: MIT
+
+servers:
+  - url: https://api.weatherapi.com
+    description: Production server
+
+paths:
+  /current:
+    get:
+      summary: Get current weather
+      description: Returns current weather for a given location
+      operationId: getCurrentWeather
+      tags:
+        - Weather
+      parameters:
+        - name: location
+          in: query
+          description: City name or coordinates
+          required: true
+          schema:
+            type: string
+          example: "London"
+        - name: units
+          in: query
+          description: Units of measurement
+          required: false
+          schema:
+            type: string
+            enum: [metric, imperial]
+            default: metric
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentWeather'
+              examples:
+                london:
+                  summary: Weather in London
+                  value:
+                    location: London
+                    temperature: 15.5
+                    feels_like: 14.2
+                    humidity: 72
+                    description: Partly cloudy
+                    wind_speed: 12.5
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /forecast:
+    get:
+      summary: Get weather forecast
+      description: Returns weather forecast for the next 7 days
+      operationId: getWeatherForecast
+      tags:
+        - Weather
+      parameters:
+        - name: location
+          in: query
+          description: City name or coordinates
+          required: true
+          schema:
+            type: string
+        - name: days
+          in: query
+          description: Number of days (1-7)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 7
+            default: 5
+        - name: units
+          in: query
+          description: Units of measurement
+          required: false
+          schema:
+            type: string
+            enum: [metric, imperial]
+            default: metric
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Forecast'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    CurrentWeather:
+      type: object
+      properties:
+        location:
+          type: string
+          description: Location name
+        temperature:
+          type: number
+          format: float
+          description: Current temperature
+        feels_like:
+          type: number
+          format: float
+          description: Feels like temperature
+        humidity:
+          type: integer
+          description: Humidity percentage
+        description:
+          type: string
+          description: Weather description
+        wind_speed:
+          type: number
+          format: float
+          description: Wind speed
+
+    ForecastDay:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          description: Forecast date
+        max_temp:
+          type: number
+          format: float
+          description: Maximum temperature
+        min_temp:
+          type: number
+          format: float
+          description: Minimum temperature
+        description:
+          type: string
+          description: Weather description
+        precipitation_chance:
+          type: integer
+          description: Chance of precipitation (%)
+
+    Forecast:
+      type: object
+      properties:
+        location:
+          type: string
+          description: Location name
+        forecast:
+          type: array
+          items:
+            $ref: '#/components/schemas/ForecastDay'
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          description: Error code
+        message:
+          type: string
+          description: Error message
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+
+security:
+  - ApiKeyAuth: []

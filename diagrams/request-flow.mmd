@@ -1,0 +1,47 @@
+sequenceDiagram
+    participant Client
+    participant Gateway as APIM Gateway
+    participant Cache
+    participant Policies as Policy Engine
+    participant Backend as Backend API
+    participant AppInsights as Application Insights
+
+    Client->>Gateway: API Request + Subscription Key
+    Gateway->>Gateway: Validate Subscription Key
+
+    alt Invalid Key
+        Gateway-->>Client: 401 Unauthorized
+    end
+
+    Gateway->>Policies: Execute Inbound Policies
+
+    Note over Policies: - Rate Limiting<br/>- IP Filtering<br/>- JWT Validation<br/>- Set Headers<br/>- Transform Request
+
+    Policies->>Cache: Check Cache
+
+    alt Cache Hit
+        Cache-->>Policies: Return Cached Response
+        Policies-->>Gateway: Cached Data
+        Gateway-->>Client: 200 OK (Cached)
+    else Cache Miss
+        Policies->>Backend: Forward Request
+        Backend-->>Policies: Backend Response
+
+        Policies->>Policies: Execute Outbound Policies
+
+        Note over Policies: - Transform Response<br/>- Set Headers<br/>- Cache Response
+
+        Policies->>Cache: Store in Cache (if configured)
+        Policies-->>Gateway: Processed Response
+        Gateway-->>Client: 200 OK
+    end
+
+    Gateway->>AppInsights: Log Request & Response
+
+    alt Backend Error
+        Backend-->>Policies: Error Response
+        Policies->>Policies: Execute On-Error Policies
+        Note over Policies: - Custom Error Message<br/>- Log Error<br/>- Return Mock Response
+        Policies-->>Gateway: Error Response
+        Gateway-->>Client: Error Response
+    end

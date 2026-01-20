@@ -1,0 +1,65 @@
+graph TB
+    subgraph "APIM Instance"
+        subgraph "Products"
+            Starter[Starter Product<br/>- 10 calls/min<br/>- Limited APIs]
+            Premium[Premium Product<br/>- 100 calls/min<br/>- All APIs]
+            Internal[Internal Product<br/>- Unlimited<br/>- All APIs]
+        end
+
+        subgraph "APIs"
+            API1[Weather API]
+            API2[User API]
+            API3[Payment API]
+            API4[Admin API]
+        end
+
+        Starter -.->|Includes| API1
+        Starter -.->|Includes| API2
+
+        Premium -.->|Includes| API1
+        Premium -.->|Includes| API2
+        Premium -.->|Includes| API3
+
+        Internal -.->|Includes| API1
+        Internal -.->|Includes| API2
+        Internal -.->|Includes| API3
+        Internal -.->|Includes| API4
+    end
+
+    subgraph "Subscriptions"
+        Sub1[Subscription 1<br/>Product: Starter<br/>Key: abc123...]
+        Sub2[Subscription 2<br/>Product: Premium<br/>Key: def456...]
+        Sub3[Subscription 3<br/>Product: Internal<br/>Key: ghi789...]
+    end
+
+    subgraph "Users"
+        User1[External Developer]
+        User2[Partner Company]
+        User3[Internal Team]
+    end
+
+    User1 -->|Subscribes to| Sub1
+    User2 -->|Subscribes to| Sub2
+    User3 -->|Subscribes to| Sub3
+
+    Sub1 -.->|Access via| Starter
+    Sub2 -.->|Access via| Premium
+    Sub3 -.->|Access via| Internal
+
+    subgraph "API Calls"
+        Call1[GET /weather<br/>Header: Ocp-Apim-Subscription-Key: abc123]
+        Call2[GET /payment<br/>Header: Ocp-Apim-Subscription-Key: def456]
+    end
+
+    User1 -->|Makes Request| Call1
+    User2 -->|Makes Request| Call2
+
+    Call1 -->|Allowed| API1
+    Call2 -->|Allowed| API3
+
+    style Starter fill:#fff9c4
+    style Premium fill:#c5e1a5
+    style Internal fill:#b3e5fc
+    style Sub1 fill:#ffecb3
+    style Sub2 fill:#dcedc8
+    style Sub3 fill:#b2ebf2
