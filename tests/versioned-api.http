@@ -1,0 +1,228 @@
+### Versioned API Testing
+### Test both v1 and v2 through APIM
+
+### Variables
+@apimGateway = your-apim-name.azure-api.net
+@subscriptionKey = your-subscription-key-here
+@baseUrl = https://{{apimGateway}}
+
+### Local testing (if running locally)
+# @baseUrl = https://localhost:7001
+
+###############################################################################
+### VERSION 1 Tests
+###############################################################################
+
+### V1 - Get all products
+GET {{baseUrl}}/v1/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V1 - Get product by ID
+GET {{baseUrl}}/v1/products/1
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V1 - Get product by ID - Not Found
+GET {{baseUrl}}/v1/products/999
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V1 - Create product (basic fields only)
+POST {{baseUrl}}/v1/products
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "name": "Monitor",
+  "price": 299.99
+}
+
+### V1 - Update product
+PUT {{baseUrl}}/v1/products/1
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "name": "Updated Laptop",
+  "price": 899.99
+}
+
+### V1 - Delete product
+DELETE {{baseUrl}}/v1/products/1
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+###############################################################################
+### VERSION 2 Tests
+###############################################################################
+
+### V2 - Get all products (basic)
+GET {{baseUrl}}/v2/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V2 - Get all products with category filter
+GET {{baseUrl}}/v2/products?category=Electronics
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V2 - Get all products with price range
+GET {{baseUrl}}/v2/products?minPrice=50&maxPrice=500
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V2 - Get all products - in stock only
+GET {{baseUrl}}/v2/products?inStock=true
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V2 - Get all products - complex filter
+GET {{baseUrl}}/v2/products?category=Electronics&minPrice=100&maxPrice=1000&inStock=true
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V2 - Get product by ID (enhanced response)
+GET {{baseUrl}}/v2/products/1
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V2 - Search products (NEW in v2)
+GET {{baseUrl}}/v2/products/search?query=laptop
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V2 - Search products - empty query
+GET {{baseUrl}}/v2/products/search?query=
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V2 - Get products by category (NEW in v2)
+GET {{baseUrl}}/v2/products/category/Electronics
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V2 - Get products by category - case insensitive
+GET {{baseUrl}}/v2/products/category/electronics
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V2 - Create product (requires full details in v2)
+POST {{baseUrl}}/v2/products
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "name": "4K Monitor",
+  "description": "Ultra HD 4K monitor with HDR",
+  "price": 399.99,
+  "category": "Electronics",
+  "stock": 30,
+  "imageUrl": "https://example.com/monitor.jpg"
+}
+
+### V2 - Create product - missing category (should fail in v2)
+POST {{baseUrl}}/v2/products
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "name": "Monitor",
+  "description": "A monitor",
+  "price": 299.99,
+  "stock": 10
+}
+
+### V2 - Update product (full update)
+PUT {{baseUrl}}/v2/products/1
+Content-Type: application/json
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+{
+  "name": "Premium Laptop",
+  "description": "High-end gaming laptop with RTX graphics",
+  "price": 1499.99,
+  "category": "Electronics",
+  "stock": 25,
+  "imageUrl": "https://example.com/premium-laptop.jpg"
+}
+
+### V2 - Update stock (NEW in v2 - PATCH endpoint)
+PATCH {{baseUrl}}/v2/products/1/stock?quantity=100
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V2 - Update stock - zero quantity
+PATCH {{baseUrl}}/v2/products/1/stock?quantity=0
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V2 - Delete product
+DELETE {{baseUrl}}/v2/products/1
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+###############################################################################
+### Comparing V1 vs V2 Responses
+###############################################################################
+
+### Same endpoint, different versions - Compare responses!
+
+### V1 Response (basic fields)
+GET {{baseUrl}}/v1/products/1
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V2 Response (enhanced fields)
+GET {{baseUrl}}/v2/products/1
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+###############################################################################
+### Version-Specific Features
+###############################################################################
+
+### Try V2-only endpoint on V1 (should 404)
+GET {{baseUrl}}/v1/products/search?query=laptop
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Try V2-only endpoint on V2 (should work)
+GET {{baseUrl}}/v2/products/search?query=laptop
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Try V2-only category endpoint on V1 (should 404)
+GET {{baseUrl}}/v1/products/category/Electronics
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Try V2-only category endpoint on V2 (should work)
+GET {{baseUrl}}/v2/products/category/Electronics
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+###############################################################################
+### Error Cases
+###############################################################################
+
+### V1 - Product not found
+GET {{baseUrl}}/v1/products/99999
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V2 - Product not found (enhanced error response)
+GET {{baseUrl}}/v2/products/99999
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Wrong version in URL - should 404
+GET {{baseUrl}}/v3/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### No version in URL - should fail
+GET {{baseUrl}}/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+###############################################################################
+### Performance Comparison
+###############################################################################
+
+### V1 - Simple query (baseline)
+GET {{baseUrl}}/v1/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V2 - Same query (check if overhead)
+GET {{baseUrl}}/v2/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### V2 - Complex query with filters
+GET {{baseUrl}}/v2/products?category=Electronics&minPrice=50&maxPrice=1000&inStock=true
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+###############################################################################
+### Verify Version Headers (if configured)
+###############################################################################
+
+### Check if API returns version info in headers
+GET {{baseUrl}}/v1/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+### Should show api-supported-versions in response headers
+GET {{baseUrl}}/v2/products
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
