@@ -1,0 +1,19 @@
+# Ignore auto-generated OpenAPI specs
+# These are generated during build and should not be committed
+versioned-api-*.json
+
+# Keep example specs
+!*-example.json
+
+# Environment-specific generated files
+dev/*.json
+!dev/*-example.json
+
+staging/*.json
+!staging/*-example.json
+
+prod/*.json
+!prod/*-example.json
+
+# Keep .gitkeep files
+!.gitkeep

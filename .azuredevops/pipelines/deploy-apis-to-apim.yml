@@ -1,0 +1,340 @@
+# ============================================================================
+# Azure DevOps Pipeline: Deploy APIs to APIM
+# ============================================================================
+# This pipeline demonstrates the recommended approach for deploying versioned
+# APIs to Azure API Management:
+#
+# 1. Build API project and generate OpenAPI specs
+# 2. Upload specs to Azure Blob Storage
+# 3. Deploy APIM infrastructure using specs from storage
+#
+# This approach eliminates circular dependencies and scales to unlimited versions.
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - api/**
+      - bicep/**
+      - openapi-specs/**
+
+variables:
+  # Azure Configuration
+  azureSubscription: 'YOUR_SERVICE_CONNECTION_NAME'
+  resourceGroup: 'rg-apim-learning'
+  location: 'eastus'
+  apimServiceName: 'apim-learning-$(Build.BuildId)'
+
+  # Storage Configuration
+  storageAccountName: 'apimspecs$(uniqueId)'  # Must be globally unique
+  storageContainerName: 'openapi-specs'
+
+  # Build Configuration
+  buildConfiguration: 'Release'
+  dotnetVersion: '8.x'
+
+stages:
+  # ==========================================================================
+  # STAGE 1: Build API and Generate OpenAPI Specs
+  # ==========================================================================
+  - stage: Build
+    displayName: 'Build API and Generate Specs'
+    jobs:
+      - job: BuildAPI
+        displayName: 'Build and Export OpenAPI'
+        pool:
+          vmImage: 'ubuntu-latest'
+
+        steps:
+          # Setup .NET
+          - task: UseDotNetCore@2
+            displayName: 'Install .NET SDK'
+            inputs:
+              version: $(dotnetVersion)
+
+          # Restore dependencies
+          - task: DotNetCoreCLI@2
+            displayName: 'Restore NuGet packages'
+            inputs:
+              command: 'restore'
+              projects: 'api/**/*.csproj'
+
+          # Build the API
+          - task: DotNetCoreCLI@2
+            displayName: 'Build API project'
+            inputs:
+              command: 'build'
+              projects: 'api/VersionedAPI/VersionedAPI.csproj'
+              arguments: '--configuration $(buildConfiguration) --no-restore'
+
+          # Run tests
+          - task: DotNetCoreCLI@2
+            displayName: 'Run unit tests'
+            inputs:
+              command: 'test'
+              projects: 'api/**/*Tests.csproj'
+              arguments: '--configuration $(buildConfiguration) --no-build'
+
+          # Export OpenAPI specifications
+          - task: DotNetCoreCLI@2
+            displayName: 'Export OpenAPI Specs'
+            inputs:
+              command: 'run'
+              projects: 'api/VersionedAPI/VersionedAPI.csproj'
+              arguments: '-- --export-openapi --output $(Build.ArtifactStagingDirectory)/openapi-specs'
+
+          # Validate OpenAPI specs (optional but recommended)
+          - task: Npm@1
+            displayName: 'Install OpenAPI validator'
+            inputs:
+              command: 'custom'
+              customCommand: 'install -g @apidevtools/swagger-cli'
+
+          - script: |
+              for spec in $(Build.ArtifactStagingDirectory)/openapi-specs/*.json; do
+                echo "Validating $spec..."
+                swagger-cli validate "$spec"
+              done
+            displayName: 'Validate OpenAPI Specs'
+
+          # Publish OpenAPI specs as build artifact
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish OpenAPI Specs Artifact'
+            inputs:
+              pathToPublish: '$(Build.ArtifactStagingDirectory)/openapi-specs'
+              artifactName: 'openapi-specs'
+              publishLocation: 'Container'
+
+          # Publish Bicep files as build artifact
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Bicep Artifacts'
+            inputs:
+              pathToPublish: 'bicep'
+              artifactName: 'bicep'
+              publishLocation: 'Container'
+
+  # ==========================================================================
+  # STAGE 2: Upload Specs to Storage
+  # ==========================================================================
+  - stage: UploadSpecs
+    displayName: 'Upload Specs to Blob Storage'
+    dependsOn: Build
+    jobs:
+      - job: UploadToStorage
+        displayName: 'Upload OpenAPI Specs'
+        pool:
+          vmImage: 'ubuntu-latest'
+
+        steps:
+          # Download OpenAPI specs artifact
+          - task: DownloadBuildArtifacts@1
+            displayName: 'Download OpenAPI Specs'
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: 'openapi-specs'
+              downloadPath: '$(System.ArtifactsDirectory)'
+
+          # Create storage account if it doesn't exist
+          - task: AzureCLI@2
+            displayName: 'Create Storage Account'
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Create resource group
+                az group create \
+                  --name $(resourceGroup) \
+                  --location $(location)
+
+                # Create storage account
+                az storage account create \
+                  --name $(storageAccountName) \
+                  --resource-group $(resourceGroup) \
+                  --location $(location) \
+                  --sku Standard_LRS \
+                  --kind StorageV2 \
+                  --min-tls-version TLS1_2 \
+                  --allow-blob-public-access false
+
+                # Create container
+                az storage container create \
+                  --name $(storageContainerName) \
+                  --account-name $(storageAccountName) \
+                  --auth-mode login \
+                  --public-access off
+
+          # Upload OpenAPI specs to blob storage
+          - task: AzureCLI@2
+            displayName: 'Upload OpenAPI Specs to Storage'
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                echo "Uploading OpenAPI specs to blob storage..."
+
+                az storage blob upload-batch \
+                  --account-name $(storageAccountName) \
+                  --destination $(storageContainerName) \
+                  --source $(System.ArtifactsDirectory)/openapi-specs \
+                  --auth-mode login \
+                  --overwrite \
+                  --output table
+
+                echo "✅ Upload complete!"
+
+          # Generate SAS token for APIM to access specs
+          - task: AzureCLI@2
+            displayName: 'Generate SAS Token'
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Generate SAS token valid for 2 hours
+                END_DATE=$(date -u -d "2 hours" '+%Y-%m-%dT%H:%MZ')
+
+                SAS_TOKEN=$(az storage container generate-sas \
+                  --account-name $(storageAccountName) \
+                  --name $(storageContainerName) \
+                  --permissions r \
+                  --expiry $END_DATE \
+                  --auth-mode login \
+                  --output tsv)
+
+                # Set as pipeline variable (secret)
+                echo "##vso[task.setvariable variable=SasToken;issecret=true]$SAS_TOKEN"
+                echo "✅ SAS token generated (expires: $END_DATE)"
+
+  # ==========================================================================
+  # STAGE 3: Deploy Infrastructure
+  # ==========================================================================
+  - stage: DeployInfrastructure
+    displayName: 'Deploy APIM Infrastructure'
+    dependsOn: UploadSpecs
+    jobs:
+      - deployment: DeployAPIM
+        displayName: 'Deploy APIM and APIs'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'Production'  # Change to your environment
+
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                # Download Bicep artifacts
+                - task: DownloadBuildArtifacts@1
+                  displayName: 'Download Bicep Files'
+                  inputs:
+                    buildType: 'current'
+                    downloadType: 'single'
+                    artifactName: 'bicep'
+                    downloadPath: '$(System.ArtifactsDirectory)'
+
+                # Deploy APIM infrastructure
+                - task: AzureCLI@2
+                  displayName: 'Deploy APIM Infrastructure'
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      az deployment group create \
+                        --resource-group $(resourceGroup) \
+                        --template-file $(System.ArtifactsDirectory)/bicep/examples/complete-deployment-with-storage.bicep \
+                        --parameters \
+                          apimServiceName=$(apimServiceName) \
+                          storageAccountName=$(storageAccountName) \
+                          sasToken='$(SasToken)'
+
+                # Import APIs from storage
+                - task: AzureCLI@2
+                  displayName: 'Verify API Import'
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      echo "Listing imported APIs..."
+                      az apim api list \
+                        --resource-group $(resourceGroup) \
+                        --service-name $(apimServiceName) \
+                        --query "[].{Name:name, Version:apiVersion, Path:path}" \
+                        --output table
+
+  # ==========================================================================
+  # STAGE 4: Integration Tests (Optional)
+  # ==========================================================================
+  - stage: IntegrationTests
+    displayName: 'Run Integration Tests'
+    dependsOn: DeployInfrastructure
+    jobs:
+      - job: TestAPIs
+        displayName: 'Test Deployed APIs'
+        pool:
+          vmImage: 'ubuntu-latest'
+
+        steps:
+          - task: AzureCLI@2
+            displayName: 'Test API Endpoints'
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Get APIM gateway URL
+                GATEWAY_URL=$(az apim show \
+                  --resource-group $(resourceGroup) \
+                  --name $(apimServiceName) \
+                  --query 'gatewayUrl' \
+                  --output tsv)
+
+                echo "APIM Gateway: $GATEWAY_URL"
+
+                # Test v1 endpoint
+                echo "Testing v1 API..."
+                curl -f "$GATEWAY_URL/products/v1/products" || exit 1
+
+                # Test v2 endpoint
+                echo "Testing v2 API..."
+                curl -f "$GATEWAY_URL/products/v2/products" || exit 1
+
+                echo "✅ All API tests passed!"
+
+# ============================================================================
+# VARIABLES GROUPS (Define in Azure DevOps Library)
+# ============================================================================
+# Create a variable group named "APIM-Configuration" with:
+# - azureSubscription: Service connection name
+# - resourceGroup: Resource group name
+# - storageAccountName: Storage account name (unique)
+# - apimServiceName: APIM service name
+
+# ============================================================================
+# SERVICE CONNECTION SETUP
+# ============================================================================
+# 1. Go to Project Settings > Service connections
+# 2. Create new Azure Resource Manager connection
+# 3. Use Service Principal (automatic) or Managed Identity
+# 4. Grant permissions to:
+#    - Create/manage resource groups
+#    - Create/manage storage accounts
+#    - Create/manage APIM services
+#    - Generate SAS tokens
+
+# ============================================================================
+# PIPELINE TRIGGER OPTIONS
+# ============================================================================
+# Trigger on:
+# - Push to main/develop branches
+# - Changes to API code (api/**)
+# - Changes to infrastructure (bicep/**)
+# - Changes to OpenAPI specs (openapi-specs/**)
+#
+# Customize the trigger section at the top as needed

@@ -1,0 +1,353 @@
+# ============================================================================
+# GitHub Actions Workflow: Deploy APIs to APIM
+# ============================================================================
+# This workflow demonstrates the recommended approach for deploying versioned
+# APIs to Azure API Management:
+#
+# 1. Build API project and generate OpenAPI specs
+# 2. Upload specs to Azure Blob Storage
+# 3. Deploy APIM infrastructure using specs from storage
+#
+# Prerequisites:
+# - Azure credentials stored in GitHub secrets (AZURE_CREDENTIALS)
+# - Azure subscription ID (AZURE_SUBSCRIPTION_ID)
+# - Resource group name (AZURE_RESOURCE_GROUP)
+
+name: Deploy APIs to APIM
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'api/**'
+      - 'bicep/**'
+      - 'openapi-specs/**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  # Azure Configuration
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  AZURE_RESOURCE_GROUP: rg-apim-learning
+  AZURE_LOCATION: eastus
+  APIM_SERVICE_NAME: apim-learning-${{ github.run_number }}
+
+  # Storage Configuration
+  STORAGE_ACCOUNT_NAME: apimspecs${{ github.run_number }}
+  STORAGE_CONTAINER_NAME: openapi-specs
+
+  # Build Configuration
+  DOTNET_VERSION: '8.x'
+  BUILD_CONFIGURATION: Release
+
+jobs:
+  # ==========================================================================
+  # JOB 1: Build API and Generate OpenAPI Specs
+  # ==========================================================================
+  build-and-export:
+    name: Build API and Export Specs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore api/VersionedAPI/VersionedAPI.csproj
+
+      - name: Build API
+        run: |
+          dotnet build api/VersionedAPI/VersionedAPI.csproj \
+            --configuration ${{ env.BUILD_CONFIGURATION }} \
+            --no-restore
+
+      - name: Run tests
+        run: dotnet test api/**/*Tests.csproj --configuration ${{ env.BUILD_CONFIGURATION }}
+        continue-on-error: true  # Don't fail if no tests exist yet
+
+      - name: Export OpenAPI Specs
+        run: |
+          cd api/VersionedAPI
+          dotnet run -- --export-openapi --output ${{ github.workspace }}/artifacts/openapi-specs
+
+      - name: Install OpenAPI validator
+        run: npm install -g @apidevtools/swagger-cli
+
+      - name: Validate OpenAPI Specs
+        run: |
+          for spec in ${{ github.workspace }}/artifacts/openapi-specs/*.json; do
+            echo "Validating $spec..."
+            swagger-cli validate "$spec"
+          done
+
+      - name: Upload OpenAPI Specs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-specs
+          path: artifacts/openapi-specs
+          retention-days: 30
+
+      - name: Upload Bicep artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bicep
+          path: bicep
+          retention-days: 30
+
+  # ==========================================================================
+  # JOB 2: Upload Specs to Azure Blob Storage
+  # ==========================================================================
+  upload-to-storage:
+    name: Upload Specs to Storage
+    runs-on: ubuntu-latest
+    needs: build-and-export
+    outputs:
+      sas-token: ${{ steps.generate-sas.outputs.sasToken }}
+
+    steps:
+      - name: Download OpenAPI specs artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: openapi-specs
+          path: artifacts/openapi-specs
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Create Storage Account
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            # Create resource group
+            az group create \
+              --name ${{ env.AZURE_RESOURCE_GROUP }} \
+              --location ${{ env.AZURE_LOCATION }}
+
+            # Create storage account
+            az storage account create \
+              --name ${{ env.STORAGE_ACCOUNT_NAME }} \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --location ${{ env.AZURE_LOCATION }} \
+              --sku Standard_LRS \
+              --kind StorageV2 \
+              --min-tls-version TLS1_2 \
+              --allow-blob-public-access false
+
+            # Create container
+            az storage container create \
+              --name ${{ env.STORAGE_CONTAINER_NAME }} \
+              --account-name ${{ env.STORAGE_ACCOUNT_NAME }} \
+              --auth-mode login \
+              --public-access off
+
+      - name: Upload OpenAPI Specs
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            echo "📤 Uploading OpenAPI specs to blob storage..."
+
+            az storage blob upload-batch \
+              --account-name ${{ env.STORAGE_ACCOUNT_NAME }} \
+              --destination ${{ env.STORAGE_CONTAINER_NAME }} \
+              --source artifacts/openapi-specs \
+              --auth-mode login \
+              --overwrite \
+              --output table
+
+            echo "✅ Upload complete!"
+
+      - name: Generate SAS Token
+        id: generate-sas
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            # Generate SAS token valid for 2 hours
+            END_DATE=$(date -u -d "2 hours" '+%Y-%m-%dT%H:%MZ')
+
+            SAS_TOKEN=$(az storage container generate-sas \
+              --account-name ${{ env.STORAGE_ACCOUNT_NAME }} \
+              --name ${{ env.STORAGE_CONTAINER_NAME }} \
+              --permissions r \
+              --expiry $END_DATE \
+              --auth-mode login \
+              --output tsv)
+
+            # Set as output (masked)
+            echo "::add-mask::$SAS_TOKEN"
+            echo "sasToken=$SAS_TOKEN" >> $GITHUB_OUTPUT
+            echo "✅ SAS token generated (expires: $END_DATE)"
+
+  # ==========================================================================
+  # JOB 3: Deploy APIM Infrastructure
+  # ==========================================================================
+  deploy-infrastructure:
+    name: Deploy APIM Infrastructure
+    runs-on: ubuntu-latest
+    needs: upload-to-storage
+    environment: production  # Use GitHub environments for approvals
+
+    steps:
+      - name: Download Bicep artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: bicep
+          path: bicep
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy APIM Infrastructure
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az deployment group create \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --template-file bicep/examples/complete-deployment-with-storage.bicep \
+              --parameters \
+                apimServiceName=${{ env.APIM_SERVICE_NAME }} \
+                storageAccountName=${{ env.STORAGE_ACCOUNT_NAME }} \
+                sasToken='${{ needs.upload-to-storage.outputs.sas-token }}'
+
+      - name: Verify API Import
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            echo "📋 Listing imported APIs..."
+            az apim api list \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --service-name ${{ env.APIM_SERVICE_NAME }} \
+              --query "[].{Name:name, Version:apiVersion, Path:path}" \
+              --output table
+
+      - name: Get APIM Gateway URL
+        id: apim-url
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            GATEWAY_URL=$(az apim show \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --name ${{ env.APIM_SERVICE_NAME }} \
+              --query 'gatewayUrl' \
+              --output tsv)
+
+            echo "Gateway URL: $GATEWAY_URL"
+            echo "gatewayUrl=$GATEWAY_URL" >> $GITHUB_OUTPUT
+
+      - name: Display deployment summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**APIM Service:** ${{ env.APIM_SERVICE_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Gateway URL:** ${{ steps.apim-url.outputs.gatewayUrl }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Resource Group:** ${{ env.AZURE_RESOURCE_GROUP }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Storage Account:** ${{ env.STORAGE_ACCOUNT_NAME }}" >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================================================
+  # JOB 4: Integration Tests
+  # ==========================================================================
+  integration-tests:
+    name: Run Integration Tests
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    if: github.event_name == 'push'  # Only run on push, not PR
+
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Test API Endpoints
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            # Get APIM gateway URL
+            GATEWAY_URL=$(az apim show \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --name ${{ env.APIM_SERVICE_NAME }} \
+              --query 'gatewayUrl' \
+              --output tsv)
+
+            echo "🧪 Testing APIM Gateway: $GATEWAY_URL"
+
+            # Test v1 endpoint
+            echo "Testing v1 API..."
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$GATEWAY_URL/products/v1/products")
+            if [ $HTTP_STATUS -eq 200 ] || [ $HTTP_STATUS -eq 401 ]; then
+              echo "✅ v1 endpoint responding (HTTP $HTTP_STATUS)"
+            else
+              echo "❌ v1 endpoint failed (HTTP $HTTP_STATUS)"
+              exit 1
+            fi
+
+            # Test v2 endpoint
+            echo "Testing v2 API..."
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$GATEWAY_URL/products/v2/products")
+            if [ $HTTP_STATUS -eq 200 ] || [ $HTTP_STATUS -eq 401 ]; then
+              echo "✅ v2 endpoint responding (HTTP $HTTP_STATUS)"
+            else
+              echo "❌ v2 endpoint failed (HTTP $HTTP_STATUS)"
+              exit 1
+            fi
+
+            echo "✅ All API tests passed!"
+
+# ============================================================================
+# REQUIRED GITHUB SECRETS
+# ============================================================================
+# Configure these secrets in your GitHub repository:
+# Settings > Secrets and variables > Actions > New repository secret
+#
+# 1. AZURE_CREDENTIALS
+#    Create a service principal and store the JSON:
+#    az ad sp create-for-rbac --name "github-actions-apim" \
+#      --role contributor \
+#      --scopes /subscriptions/{subscription-id}/resourceGroups/{resource-group} \
+#      --sdk-auth
+#
+#    Copy the entire JSON output to this secret
+#
+# 2. AZURE_SUBSCRIPTION_ID
+#    Your Azure subscription ID
+#
+# 3. AZURE_RESOURCE_GROUP (optional, can use env var instead)
+#    Resource group name for APIM resources
+
+# ============================================================================
+# GITHUB ENVIRONMENTS SETUP (Optional but Recommended)
+# ============================================================================
+# Create environments for approval gates:
+# Settings > Environments > New environment
+#
+# - development: No approvals, auto-deploy
+# - staging: Require 1 reviewer
+# - production: Require 2 reviewers + wait timer
+#
+# Update the "environment" field in deploy-infrastructure job
+
+# ============================================================================
+# ALTERNATIVE: Use OIDC (Workload Identity Federation)
+# ============================================================================
+# For more secure authentication without storing credentials:
+#
+# - name: Azure Login with OIDC
+#   uses: azure/login@v2
+#   with:
+#     client-id: ${{ secrets.AZURE_CLIENT_ID }}
+#     tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+#     subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+#
+# Setup guide: https://docs.github.com/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-azure

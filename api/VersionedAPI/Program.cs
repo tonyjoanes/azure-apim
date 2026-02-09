@@ -104,4 +104,36 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
 
+// ============================================================================
+// OPTIONAL: Export OpenAPI Specs to Files
+// ============================================================================
+// This allows APIM to import from files instead of requiring a running API.
+// Uncomment ONE of the options below based on your needs:
+
+// OPTION 1: Export in Development environment only
+// if (app.Environment.IsDevelopment())
+// {
+//     await app.ExportOpenApiSpecsAsync("./openapi-specs");
+// }
+
+// OPTION 2: Export when environment variable is set (recommended for CI/CD)
+// Usage: EXPORT_OPENAPI_SPECS=true dotnet run
+// await app.ExportOpenApiSpecsIfConfiguredAsync();
+
+// OPTION 3: Export via command line argument
+// Usage: dotnet run -- --export-openapi
+if (args.Contains("--export-openapi"))
+{
+    var outputDir = args.Contains("--output")
+        ? args[Array.IndexOf(args, "--output") + 1]
+        : "./openapi-specs";
+
+    await app.ExportOpenApiSpecsAsync(outputDir);
+
+    Console.WriteLine("✅ OpenAPI export complete. Exiting...");
+    Environment.Exit(0);
+}
+
+// ============================================================================
+
 app.Run();

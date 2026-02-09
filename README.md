@@ -10,25 +10,40 @@ This repository provides a complete learning path for Azure API Management (APIM
 
 ```
 📁 azure-apim/
-├── 📁 bicep/              # Infrastructure as Code templates
-│   ├── 📁 modules/        # Reusable Bicep modules
-│   └── 📁 main/          # Main deployment templates
-├── 📁 docs/               # Documentation
-│   ├── 📁 getting-started/
-│   ├── 📁 concepts/
-│   ├── 📁 authentication/
-│   ├── 📁 policies/
-│   ├── 📁 products/
-│   ├── 📁 testing/
-│   └── 📁 monitoring/
-├── 📁 api/                # Sample C# API project
-├── 📁 specs/              # OpenAPI specifications
-├── 📁 policies/           # Policy examples
+├── 📁 bicep/                      # Infrastructure as Code templates
+│   ├── 📁 modules/                # Reusable Bicep modules
+│   │   ├── api-from-storage.bicep # Import APIs from blob storage ⭐
+│   │   ├── api-from-file.bicep    # Import APIs from repository files
+│   │   ├── openapi-storage.bicep  # Storage account for OpenAPI specs
+│   │   ├── api-version-set.bicep  # APIM Version Sets (critical!)
+│   │   └── api-versioned.bicep    # Versioned API deployment
+│   └── 📁 examples/               # Complete deployment examples
+├── 📁 docs/                       # Documentation
+│   ├── 📁 concepts/               # Core concepts
+│   ├── 📁 authentication/         # Auth methods
+│   ├── 📁 policies/               # Policy guides
+│   ├── api-import-strategies.md   # ⭐ NEW: How to import APIs at scale
+│   ├── api-versioning-guidelines.md  # Versioning standards
+│   └── api-versioning-guidelines-enforcement.md  # Mandatory requirements
+├── 📁 api/                        # Sample C# API projects
+│   └── VersionedAPI/              # Example versioned API
+│       ├── OpenApiExporter.cs     # Export specs to files ⭐
+│       └── Program.ExportExample.cs  # Export examples
+├── 📁 openapi-specs/              # ⭐ NEW: OpenAPI specifications storage
+│   ├── dev/                       # Development environment specs
+│   ├── staging/                   # Staging environment specs
+│   ├── prod/                      # Production environment specs
+│   └── README.md                  # Spec management guide
+├── 📁 .azuredevops/pipelines/     # ⭐ NEW: Azure DevOps CI/CD
+│   └── deploy-apis-to-apim.yml    # Complete deployment pipeline
+├── 📁 .github/workflows/          # ⭐ NEW: GitHub Actions
+│   └── deploy-apis-to-apim.yml    # Complete deployment workflow
+├── 📁 policies/                   # Policy examples
 │   ├── 📁 examples/
 │   └── 📁 fragments/
-├── 📁 tests/              # .http test files
-├── 📁 diagrams/           # Mermaid diagrams
-└── 📁 examples/           # Practical scenarios
+├── 📁 tests/                      # .http test files
+├── 📁 diagrams/                   # Mermaid diagrams
+└── 📁 examples/                   # Practical scenarios
 ```
 
 ## Quick Start
@@ -88,8 +103,26 @@ This repository provides a complete learning path for Azure API Management (APIM
 - [Debugging Policies](docs/testing/debugging.md)
 - [Developer Portal](docs/concepts/developer-portal.md)
 
-### 8. Advanced Topics
-- [Versioning & Revisions](docs/concepts/versioning.md)
+### 8. API Versioning (CRITICAL for APIM)
+- [Complete Versioning Guide](docs/concepts/versioning-complete-guide.md) - How to make all versions visible in APIM
+- [API Versioning Guidelines](docs/api-versioning-guidelines.md) - Mandatory standards for API versioning
+- [Enforcement Standards](docs/api-versioning-guidelines-enforcement.md) - PR checklist and compliance
+- [Versioning Troubleshooting](docs/concepts/versioning-troubleshooting.md) - Fix common issues
+- [Placeholder Explanation](docs/concepts/versioning-placeholders-explained.md) - Understanding {version:apiVersion}
+- [Meeting Plan](docs/meeting-plan-versioning.md) - Present versioning to your team
+- [Executive Summary](docs/versioning-standards-summary.md) - Business case for leadership
+
+### 9. API Import Strategies (NEW - Scalable Deployment)
+- **[API Import Strategies](docs/api-import-strategies.md)** - **START HERE** for scalable APIM deployments
+- [OpenAPI Storage Module](bicep/modules/openapi-storage.bicep) - Blob storage for specs
+- [API from Storage Module](bicep/modules/api-from-storage.bicep) - Import from blob storage
+- [API from File Module](bicep/modules/api-from-file.bicep) - Import from repository files
+- [Complete Deployment Example](bicep/examples/complete-deployment-with-storage.bicep) - Full workflow
+- [Azure DevOps Pipeline](.azuredevops/pipelines/deploy-apis-to-apim.yml) - CI/CD automation
+- [GitHub Actions Workflow](.github/workflows/deploy-apis-to-apim.yml) - CI/CD automation
+- [OpenAPI Specs Folder](openapi-specs/README.md) - Organizing specifications
+
+### 10. Advanced Topics
 - [Rate Limiting & Quotas](docs/policies/rate-limiting.md)
 - [Caching Strategies](docs/policies/caching.md)
 - [CORS Configuration](docs/policies/cors.md)
